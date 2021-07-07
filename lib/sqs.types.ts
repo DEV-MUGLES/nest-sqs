@@ -17,7 +17,7 @@ export type SqsProducerOptions = ProducerOptions & {
 export interface SqsOptions {
   consumers?: SqsConsumerOptions[];
   producers?: SqsProducerOptions[];
-};
+}
 
 export interface SqsModuleOptionsFactory {
   createOptions(): Promise<SqsOptions> | SqsOptions;
@@ -26,9 +26,7 @@ export interface SqsModuleOptionsFactory {
 export interface SqsModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
   useExisting?: Type<SqsModuleOptionsFactory>;
   useClass?: Type<SqsModuleOptionsFactory>;
-  useFactory?: (
-    ...args: any[]
-  ) => Promise<SqsOptions> | SqsOptions;
+  useFactory?: (...args: any[]) => Promise<SqsOptions> | SqsOptions;
   inject?: any[];
 }
 
@@ -48,6 +46,16 @@ export interface SqsMessageHandlerMeta {
 
 export interface SqsConsumerEventHandlerMeta {
   name: string;
-  eventName: string;
+  eventName: SqsConsumerEvent;
 }
 
+export enum SqsConsumerEvent {
+  RESPONSE_PROCESSED = 'response_processed',
+  EMPTY = 'empty',
+  MESSAGE_RECEIVED = 'message_received',
+  MESSAGE_PROCESSED = 'message_processed',
+  ERROR = 'error',
+  TIMEOUT_ERROR = 'timeout_error',
+  PROCESSING_ERROR = 'processing_error',
+  STOPPED = 'stopped',
+}
