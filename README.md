@@ -1,19 +1,13 @@
-# nestjs-sqs
+# nest-sqs
 
-[![Test](https://github.com/ssut/nestjs-sqs/workflows/Test/badge.svg)](https://github.com/ssut/nestjs-sqs/actions?query=workflow%3ATest)
-[![npm version](https://badge.fury.io/js/%40ssut%2Fnestjs-sqs.svg)](https://badge.fury.io/js/%40ssut%2Fnestjs-sqs)
-
-Tested with: [AWS SQS](https://aws.amazon.com/en/sqs/) and [ElasticMQ](https://github.com/softwaremill/elasticmq).
-
-Nestjs-sqs is a project to make SQS easier to use and control some required flows with NestJS.
-This module provides decorator-based message handling suited for simple use.
+nest-sqs is forked version of @ssut/nestjs-sqs
 
 This library internally uses [bbc/sqs-producer](https://github.com/bbc/sqs-producer) and [bbc/sqs-consumer](https://github.com/bbc/sqs-consumer), and implements some more useful features on top of the basic functionality given by them.
 
 ## Installation
 
 ```shell script
-$ npm i --save @ssut/nestjs-sqs
+$ npm i --save nest-sqs
 ```
 
 ## Quick Start
@@ -44,7 +38,7 @@ SqsModule.registerAsync({
   useFactory: () => {
     return {
       consumers: [],
-      producers: [],         
+      producers: [],
     };
   },
 });
@@ -75,9 +69,8 @@ You need to decorate methods in your NestJS providers in order to have them be a
 @Injectable()
 export class AppMessageHandler {
   @SqsMessageHandler(/** name: */ 'queueName', /** batch: */ false)
-  public async handleMessage(message: AWS.SQS.Message) {
-  }
-  
+  public async handleMessage(message: AWS.SQS.Message) {}
+
   @SqsConsumerEventHandler(/** name: */ 'queueName', /** eventName: */ 'processing_error')
   public onProcessingError(error: Error, message: AWS.SQS.Message) {
     // report errors here
@@ -92,7 +85,7 @@ export class AppService {
   public constructor(
     private readonly sqsService: SqsService,
   ) { }
-  
+
   public async dispatchSomething() {
     await this.sqsService.send(/** name: */ 'queueName', {
       id: 'id',
@@ -108,7 +101,7 @@ export class AppService {
 
 ### Configuration
 
-See [here](https://github.com/ssut/nestjs-sqs/blob/master/lib/sqs.types.ts), and note that we have same configuration as [bbc/sqs-consumer's](https://github.com/bbc/sqs-producer). 
+See [here](https://github.com/ybh1760/nest-sqs/blob/master/lib/sqs.types.ts), and note that we have same configuration as [bbc/sqs-consumer's](https://github.com/bbc/sqs-producer).
 In most time you just need to specify both `name` and `queueUrl` at the minimum requirements.
 
 ## License
