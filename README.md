@@ -7,7 +7,7 @@ This library internally uses [bbc/sqs-producer](https://github.com/bbc/sqs-produ
 ## Installation
 
 ```shell script
-$ npm i --save nest-sqs
+$ npm i --save @pickk/nest-sqs
 ```
 
 ## Quick Start
