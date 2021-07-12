@@ -1,53 +1,9 @@
 import type { ConsumerOptions } from 'sqs-consumer';
 import type { Producer } from 'sqs-producer';
 import type { SQS } from 'aws-sdk';
-import type { ModuleMetadata, Type } from '@nestjs/common';
 
 export type ProducerOptions = Parameters<typeof Producer.create>[0];
 export type QueueName = string;
-
-export type SqsConsumerOptions = Omit<ConsumerOptions, 'handleMessage' | 'handleMessageBatch'> & {
-  name: QueueName;
-};
-
-export type SqsProducerOptions = ProducerOptions & {
-  name: QueueName;
-};
-
-export interface SqsOptions {
-  consumers?: SqsConsumerOptions[];
-  producers?: SqsProducerOptions[];
-}
-
-export interface SqsModuleOptionsFactory {
-  createOptions(): Promise<SqsOptions> | SqsOptions;
-}
-
-export interface SqsModuleAsyncOptions extends Pick<ModuleMetadata, 'imports'> {
-  useExisting?: Type<SqsModuleOptionsFactory>;
-  useClass?: Type<SqsModuleOptionsFactory>;
-  useFactory?: (...args: any[]) => Promise<SqsOptions> | SqsOptions;
-  inject?: any[];
-}
-
-export interface Message<T = any> {
-  id: string;
-  body: T;
-  groupId?: string;
-  deduplicationId?: string;
-  delaySeconds?: number;
-  messageAttributes?: SQS.MessageBodyAttributeMap;
-}
-
-export interface SqsMessageHandlerMeta {
-  name: string;
-  batch?: boolean;
-}
-
-export interface SqsConsumerEventHandlerMeta {
-  name: string;
-  eventName: SqsConsumerEvent;
-}
 
 export enum SqsConsumerEvent {
   RESPONSE_PROCESSED = 'response_processed',
@@ -59,3 +15,27 @@ export enum SqsConsumerEvent {
   PROCESSING_ERROR = 'processing_error',
   STOPPED = 'stopped',
 }
+
+export type SqsConsumerOptions = Omit<
+  ConsumerOptions,
+  'handleMessage' | 'handleMessageBatch' | 'queueUrl' | 'region' | 'sqs'
+>;
+
+export type SqsProducerOptions = Omit<ProducerOptions, 'queueUrl' | 'region' | 'sqs'>;
+
+export type SqsConfigOptions = SQS.Types.ClientConfiguration & {
+  accountNumber: string;
+};
+
+export enum SqsQueueType {
+  All = 'ALL',
+  Producer = 'PRODUCER',
+  Consumer = 'CONSUMER',
+}
+export type SqsQueueOption = {
+  name: QueueName;
+  type: SqsQueueType;
+  consumerOptions?: SqsConsumerOptions;
+  producerOptions?: SqsProducerOptions;
+};
+export type SqsQueueOptions = Array<SqsQueueOption>;

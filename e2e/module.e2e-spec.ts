@@ -1,101 +1,87 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { SqsModule, SqsService } from '../lib';
-import { SqsConsumerOptions, SqsProducerOptions } from '../lib/sqs.types';
-import { Injectable } from '@nestjs/common';
-import { SqsConsumerEventHandler, SqsMessageHandler } from '../lib/sqs.decorators';
 import * as AWS from 'aws-sdk';
-import { promisify } from 'util';
 import waitForExpect from 'wait-for-expect';
+import { Test, TestingModule } from '@nestjs/testing';
 
-const delay = promisify(setTimeout);
-const SQS_ENDPOINT = process.env.SQS_ENDPOINT || 'http://localhost:9324';
+import { SqsModule, SqsService } from '../lib';
+import { SqsQueueOptions, SqsQueueType, SqsConsumerEvent } from '../lib/sqs.types';
+import { SqsProcess, SqsConsumerEventHandler, SqsMessageHandler } from '../lib/sqs.decorators';
 
 enum TestQueue {
   Test = 'test',
   DLQ = 'test-dead',
 }
 
-const sqs = new AWS.SQS({
-  apiVersion: '2012-11-05',
-  credentials: new AWS.Credentials('x', 'x'),
-  region: 'none',
-});
-
-const TestQueues: { [key in TestQueue]: SqsConsumerOptions | SqsProducerOptions } = {
-  [TestQueue.Test]: {
+const TestQueueOptions: SqsQueueOptions = [
+  {
     name: TestQueue.Test,
-    queueUrl: `${SQS_ENDPOINT}/queue/test.fifo`,
-    sqs,
+    type: SqsQueueType.All,
+    consumerOptions: {
+      waitTimeSeconds: 1,
+      batchSize: 3,
+      terminateVisibilityTimeout: true,
+      messageAttributeNames: ['All'],
+    },
   },
-  [TestQueue.DLQ]: {
-    name: TestQueue.DLQ,
-    queueUrl: `${SQS_ENDPOINT}/queue/test-dead.fifo`,
-    sqs,
+  { name: TestQueue.DLQ, type: SqsQueueType.Consumer, consumerOptions: { waitTimeSeconds: 1 } },
+];
+
+const config = {
+  region: process.env.AWS_SQS_REGION || 'ap-northeast-2',
+  endpoint: process.env.AWS_SQS_END_POINT || 'http://localhost:4566',
+  accountNumber: process.env.AWS_SQS_ACCOUNT_NUMBER || '000000000000',
+  credentials: {
+    accessKeyId: process.env.AWS_SQS_ACCESS_KEY_ID || 'temp',
+    secretAccessKey: process.env.AWS_SQS_SECRET_ACCESS_KEY || 'temp',
   },
 };
 
 describe('SqsModule', () => {
   let module: TestingModule;
 
-  describe.skip('register', () => {
-  });
-
-  describe('registerAsync', () => {
-    let module: TestingModule;
-
+  describe('forRootAsync', () => {
     afterAll(async () => {
-      await module?.close();
+      module.close();
     });
 
-    it('should register module async', async () => {
+    it('should register sqsConfig', async () => {
       module = await Test.createTestingModule({
         imports: [
-          SqsModule.registerAsync({
+          SqsModule.forRootAsync({
             useFactory: async () => {
-              return {
-                consumers: [
-                  TestQueues[TestQueue.Test],
-                ],
-                producers: [
-                  TestQueues[TestQueue.Test],
-                ],
-              };
+              return config;
             },
           }),
         ],
       }).compile();
-
-      const sqsService = module.get(SqsService);
-      expect(sqsService).toBeTruthy();
-      expect(sqsService.options.consumers).toHaveLength(1);
-      expect(sqsService.options.producers).toHaveLength(1);
+      const sqsConfig = await SqsModule.getConfig();
+      expect(sqsConfig).toMatchObject(config);
     });
   });
 
-  describe('full flow', () => {
+  describe('registerQueues', () => {
     const fakeProcessor = jest.fn();
     const fakeDLQProcessor = jest.fn();
     const fakeErrorEventHandler = jest.fn();
 
-    @Injectable()
+    @SqsProcess(TestQueue.Test)
     class A {
-      public constructor(
-        public readonly sqsService: SqsService,
-      ) {
-      }
+      public constructor(public readonly sqsService: SqsService) {}
 
-      @SqsMessageHandler(TestQueue.Test)
+      @SqsMessageHandler()
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       public async handleTestMessage(message: AWS.SQS.Message) {
         fakeProcessor(message);
       }
 
-      @SqsConsumerEventHandler(TestQueue.Test, 'processing_error')
+      @SqsConsumerEventHandler(SqsConsumerEvent.PROCESSING_ERROR)
       public handleErrorEvent(err: Error, message: AWS.SQS.Message) {
         fakeErrorEventHandler(err, message);
       }
+    }
 
-      @SqsMessageHandler(TestQueue.DLQ)
+    @SqsProcess(TestQueue.DLQ)
+    class B {
+      @SqsMessageHandler()
       public async handleDLQMessage(message: AWS.SQS.Message) {
         fakeDLQProcessor(message);
       }
@@ -104,37 +90,15 @@ describe('SqsModule', () => {
     beforeAll(async () => {
       module = await Test.createTestingModule({
         imports: [
-          SqsModule.register({
-            consumers: [
-              {
-                ...TestQueues[TestQueue.Test],
-                waitTimeSeconds: 1,
-                batchSize: 3,
-                terminateVisibilityTimeout: true,
-                messageAttributeNames: ['All'],
-              },
-              {
-                ...TestQueues[TestQueue.DLQ],
-                waitTimeSeconds: 1,
-              },
-            ],
-            producers: [
-              {
-                ...TestQueues[TestQueue.Test],
-              },
-            ],
+          SqsModule.forRootAsync({
+            useFactory: async () => config,
           }),
+          SqsModule.registerQueue(TestQueueOptions),
         ],
-        providers: [
-          A,
-        ],
+        providers: [A, B],
       }).compile();
       await module.init();
-
-      const sqsService = module.get(SqsService);
-      await Promise.all(Object.values(TestQueue).map((queueName) => sqsService.purgeQueue(queueName)));
     });
-
     afterEach(() => {
       fakeProcessor.mockRestore();
       fakeErrorEventHandler.mockRestore();
@@ -149,7 +113,6 @@ describe('SqsModule', () => {
       const sqsService = module.get(SqsService);
       expect(sqsService.consumers.has(TestQueue.Test)).toBe(true);
     });
-
     it('should register message producer', () => {
       const sqsService = module.get(SqsService);
       expect(sqsService.producers.has(TestQueue.Test)).toBe(true);
@@ -192,13 +155,17 @@ describe('SqsModule', () => {
         });
       }
 
-      await waitForExpect(() => {
-        expect(fakeProcessor.mock.calls).toHaveLength(3);
-        for (const call of fakeProcessor.mock.calls) {
-          expect(call).toHaveLength(1);
-          expect(call[0]).toBeTruthy();
-        }
-      }, 5000, 100);
+      await waitForExpect(
+        () => {
+          expect(fakeProcessor.mock.calls).toHaveLength(3);
+          for (const call of fakeProcessor.mock.calls) {
+            expect(call).toHaveLength(1);
+            expect(call[0]).toBeTruthy();
+          }
+        },
+        5000,
+        100,
+      );
     });
 
     it('should call the registered error handler when an error occurs', async (done) => {
@@ -206,10 +173,10 @@ describe('SqsModule', () => {
 
       const sqsService = module.get(SqsService);
       const id = String(Math.floor(Math.random() * 1000000));
-      fakeProcessor.mockImplementationOnce((message) => {
+      fakeProcessor.mockImplementationOnce(() => {
         throw new Error('test');
       });
-      fakeErrorEventHandler.mockImplementationOnce((error, message) => {
+      fakeErrorEventHandler.mockImplementationOnce((error) => {
         expect(error).toBeInstanceOf(Error);
         expect(error.message).toContain('test');
         done();
@@ -227,9 +194,13 @@ describe('SqsModule', () => {
     it('should consume a dead letter from DLQ', async () => {
       jest.setTimeout(10000);
 
-      await waitForExpect(() => {
-        expect(fakeDLQProcessor.mock.calls.length).toBe(1);
-      }, 9900, 500);
+      await waitForExpect(
+        () => {
+          expect(fakeDLQProcessor.mock.calls.length).toBe(1);
+        },
+        9900,
+        500,
+      );
     });
   });
 });
