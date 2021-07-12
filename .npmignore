@@ -13,3 +13,7 @@ tsconfig.eslint.json
 jest-e2e.config.js
 jest.config.js
 .editorconfig
+.env
+.env.dev
+docker-compose.yml
+.vscode/
