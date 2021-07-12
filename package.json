@@ -8,7 +8,9 @@
     "test:e2e": "npx jest --config=jest-e2e.config.js --detectOpenHandles --runInBand --forceExit",
     "build": "npx rimraf -rf dist && tsc -p tsconfig.json",
     "format": "npx prettier --write **/*.{ts,json}",
-    "lint": "npx eslint \"lib/**/*.ts\" --fix"
+    "lint": "npx eslint \"lib/**/*.ts\" --fix",
+    "set": "cp .env.dev .env && docker compose -f docker-compose.yml up",
+    "set:down": "docker-compose -f docker-compose.yml down --volumes && docker system prune"
   },
   "bugs": {
     "url": "https://github.com/ybh1760/nest-sqs/issues"
