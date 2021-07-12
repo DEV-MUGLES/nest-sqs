@@ -1,8 +1,8 @@
-# nest-sqs
+# @pickk/nest-sqs
 
-nest-sqs is forked version of @ssut/nestjs-sqs
+@pickk/nest-sqs is forked version of @ssut/nestjs-sqs
 
-This library internally uses [bbc/sqs-producer](https://github.com/bbc/sqs-producer) and [bbc/sqs-consumer](https://github.com/bbc/sqs-consumer), and implements some more useful features on top of the basic functionality given by them.
+This library internally uses [bbc/sqs-producer](https://github.com/bbc/sqs-producer) and [bbc/sqs-consumer](https://github.com/bbc/sqs-consumer), and implements some more useful features on top of the basic functionality given by them. this library is only for Amazon SQS.
 
 ## Installation
 
@@ -14,51 +14,36 @@ $ npm i --save @pickk/nest-sqs
 
 ### Register module
 
-Just register this module:
+For use @pickk/nest-sqs You have to perform two methods to register a module. First you have to register Amazon SQS config options.
 
 ```ts
 @Module({
   imports: [
-    SqsModule.register({
-      consumers: [],
-      producers: [],
+    SqsModule.forRootAsync({
+      imports:[ConfigModule],
+      useFactory:(configService)=>{
+        // return SQS.Types.ClientConfiguration & accountNumber(string type)
+        return {...}
+      },
+      injects:[ConfigSerivce]
     }),
   ],
 })
 class AppModule {}
 ```
 
-Quite often you might want to asynchronously pass module options instead of passing them beforehand.
-In such case, use `registerAsync()` method like many other Nest.js libraries.
-
-- Use factory
+Second you have to register queues.
 
 ```ts
-SqsModule.registerAsync({
-  useFactory: () => {
-    return {
-      consumers: [],
-      producers: [],
-    };
+SqsModule.registerQueues([
+  {
+    name: 'queueName',
+    type: 'ALL' // 'ALL'|'CONSUMER'|'PRODUCER'
+    consumerOptions?: {},
+    producerOptions?: {}
   },
-});
-```
-
-- Use class
-
-```ts
-SqsModule.registerAsync({
-  useClass: SqsConfigService,
-});
-```
-
-- Use existing
-
-```ts
-SqsModule.registerAsync({
-  imports: [ConfigModule],
-  useExisting: ConfigService,
-});
+  ...
+]);
 ```
 
 ### Decorate methods
@@ -66,17 +51,19 @@ SqsModule.registerAsync({
 You need to decorate methods in your NestJS providers in order to have them be automatically attached as event handlers for incoming SQS messages:
 
 ```ts
-@Injectable()
+@SqsProcess(/** name: */'queueName)
 export class AppMessageHandler {
-  @SqsMessageHandler(/** name: */ 'queueName', /** batch: */ false)
+  @SqsMessageHandler(/** batch: */ false)
   public async handleMessage(message: AWS.SQS.Message) {}
 
-  @SqsConsumerEventHandler(/** name: */ 'queueName', /** eventName: */ 'processing_error')
+  @SqsConsumerEventHandler(/** eventName: */ SqsConsumerEvent.PROCESSING_ERROR)
   public onProcessingError(error: Error, message: AWS.SQS.Message) {
     // report errors here
   }
 }
 ```
+
+One class can only handle one queue. so if you want to enroll dead letter queue, you have to make new class that handle dead letter queue
 
 ### Produce messages
 
