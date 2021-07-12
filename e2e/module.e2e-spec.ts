@@ -5,6 +5,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SqsModule, SqsService } from '../lib';
 import { SqsQueueOptions, SqsQueueType, SqsConsumerEvent } from '../lib/sqs.types';
 import { SqsProcess, SqsConsumerEventHandler, SqsMessageHandler } from '../lib/sqs.decorators';
+import { SqsConfig } from '../lib/sqs.config';
 
 enum TestQueue {
   Test = 'test',
@@ -47,14 +48,12 @@ describe('SqsModule', () => {
       module = await Test.createTestingModule({
         imports: [
           SqsModule.forRootAsync({
-            useFactory: async () => {
-              return config;
-            },
+            useFactory: async () => new SqsConfig(config),
           }),
         ],
       }).compile();
-      const sqsConfig = await SqsModule.getConfig();
-      expect(sqsConfig).toMatchObject(config);
+      const sqsConfig = module.get(SqsConfig);
+      expect(sqsConfig.options).toMatchObject(config);
     });
   });
 
@@ -91,7 +90,7 @@ describe('SqsModule', () => {
       module = await Test.createTestingModule({
         imports: [
           SqsModule.forRootAsync({
-            useFactory: async () => config,
+            useFactory: async () => new SqsConfig(config),
           }),
           SqsModule.registerQueue(TestQueueOptions),
         ],

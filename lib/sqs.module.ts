@@ -1,44 +1,42 @@
 import { DynamicModule, Global, Module, Provider } from '@nestjs/common';
-import { SqsService } from './sqs.service';
 import { DiscoveryModule, DiscoveryService } from '@nestjs-plus/discovery';
+
+import { SqsService } from './sqs.service';
 import { SqsAsyncConfig } from './sqs.interfaces';
-import { SqsQueueOptions, SqsConfigOptions } from './sqs.types';
+import { SqsQueueOptions } from './sqs.types';
+import { SqsConfig } from './sqs.config';
 
 @Global()
 @Module({})
 export class SqsModule {
-  private static config: SqsConfigOptions | Promise<SqsConfigOptions>;
-
-  // eslint-disable-next-line @typescript-eslint/explicit-member-accessibility
-  public static getConfig() {
-    return SqsModule.config;
-  }
-
-  private static getUniqImports(options: Array<SqsAsyncConfig>) {
-    return (
-      options
-        .map((option) => option.imports)
-        .reduce((acc, i) => acc.concat(i || []), [])
-        .filter((v, i, a) => a.indexOf(v) === i) || []
-    );
-  }
-
   public static forRootAsync(asyncSqsConfig: SqsAsyncConfig): DynamicModule {
     const imports = this.getUniqImports([asyncSqsConfig]);
-    this.config = asyncSqsConfig.useFactory();
+    const SqsConfigProvider = this.createAsyncConfigProvider(asyncSqsConfig);
 
     return {
       global: true,
       module: SqsModule,
       imports,
+      providers: [SqsConfigProvider],
+      exports: [SqsConfigProvider],
+    };
+  }
+
+  private static createAsyncConfigProvider(options: SqsAsyncConfig): Provider {
+    return {
+      provide: SqsConfig,
+      useFactory: options.useFactory,
+      inject: options.inject || [],
     };
   }
 
   public static registerQueue(options: SqsQueueOptions) {
     const sqsProvider: Provider = {
       provide: SqsService,
-      useFactory: async (discover: DiscoveryService) => new SqsService(await SqsModule.config, options, discover),
-      inject: [DiscoveryService],
+      useFactory: async (discover: DiscoveryService, sqsConfig: SqsConfig) => {
+        return new SqsService(await sqsConfig.options, options, discover);
+      },
+      inject: [DiscoveryService, SqsConfig],
     };
 
     return {
@@ -48,5 +46,14 @@ export class SqsModule {
       providers: [sqsProvider],
       exports: [sqsProvider],
     };
+  }
+
+  private static getUniqImports(options: Array<SqsAsyncConfig>) {
+    return (
+      options
+        .map((option) => option.imports)
+        .reduce((acc, i) => acc.concat(i || []), [])
+        .filter((v, i, a) => a.indexOf(v) === i) || []
+    );
   }
 }
