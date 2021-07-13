@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SqsConfigOptions } from 'lib';
+import { SqsConfigOptions } from './sqs.types';
 
 @Injectable()
 export class SqsConfig {
