@@ -6,6 +6,9 @@ import { SqsModule, SqsService } from '../lib';
 import { SqsQueueOptions, SqsQueueType, SqsConsumerEvent } from '../lib/sqs.types';
 import { SqsProcess, SqsConsumerEventHandler, SqsMessageHandler } from '../lib/sqs.decorators';
 import { SqsConfig } from '../lib/sqs.config';
+import { Inject } from '@nestjs/common';
+
+const TEST_SERVICE_KEY = 'TEST_SERVICE_KEY';
 
 enum TestQueue {
   Test = 'test',
@@ -64,7 +67,7 @@ describe('SqsModule', () => {
 
     @SqsProcess(TestQueue.Test)
     class A {
-      public constructor(public readonly sqsService: SqsService) {}
+      public constructor(@Inject(TEST_SERVICE_KEY) public readonly sqsService: SqsService) {}
 
       @SqsMessageHandler()
       // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -92,7 +95,7 @@ describe('SqsModule', () => {
           SqsModule.forRootAsync({
             useFactory: async () => new SqsConfig(config),
           }),
-          SqsModule.registerQueue(TestQueueOptions),
+          SqsModule.registerQueue(TEST_SERVICE_KEY, TestQueueOptions),
         ],
         providers: [A, B],
       }).compile();
@@ -109,18 +112,18 @@ describe('SqsModule', () => {
     });
 
     it('should register message handler', () => {
-      const sqsService = module.get(SqsService);
+      const sqsService = module.get(TEST_SERVICE_KEY);
       expect(sqsService.consumers.has(TestQueue.Test)).toBe(true);
     });
     it('should register message producer', () => {
-      const sqsService = module.get(SqsService);
+      const sqsService = module.get(TEST_SERVICE_KEY);
       expect(sqsService.producers.has(TestQueue.Test)).toBe(true);
     });
 
     it('should call message handler when a new message has come', async (done) => {
       jest.setTimeout(30000);
 
-      const sqsService = module.get(SqsService);
+      const sqsService = module.get(TEST_SERVICE_KEY);
       const id = String(Math.floor(Math.random() * 1000000));
       fakeProcessor.mockImplementationOnce((message) => {
         expect(message).toBeTruthy();
@@ -140,7 +143,7 @@ describe('SqsModule', () => {
     it('should call message handler multiple times when multiple messages have come', async () => {
       jest.setTimeout(5000);
 
-      const sqsService = module.get(SqsService);
+      const sqsService = module.get(TEST_SERVICE_KEY);
       const groupId = String(Math.floor(Math.random() * 1000000));
 
       for (let i = 0; i < 3; i++) {
@@ -170,7 +173,7 @@ describe('SqsModule', () => {
     it('should call the registered error handler when an error occurs', async (done) => {
       jest.setTimeout(10000);
 
-      const sqsService = module.get(SqsService);
+      const sqsService = module.get(TEST_SERVICE_KEY);
       const id = String(Math.floor(Math.random() * 1000000));
       fakeProcessor.mockImplementationOnce(() => {
         throw new Error('test');

@@ -30,9 +30,15 @@ export class SqsModule {
     };
   }
 
-  public static registerQueue(options: SqsQueueOptions) {
+  /**
+   *
+   * @param serviceKey SqsSerivce의 token값이다. sqsService를 inject하여 사용하기 위해서는 producer class에서 @Inject(serviceKey)를 이용하여 주입시켜줘야한다
+   * @param options
+   * @returns
+   */
+  public static registerQueue(serviceKey: string, options: SqsQueueOptions) {
     const sqsProvider: Provider = {
-      provide: SqsService,
+      provide: serviceKey,
       useFactory: async (discover: DiscoveryService, sqsConfig: SqsConfig) => {
         return new SqsService(await sqsConfig.options, options, discover);
       },
