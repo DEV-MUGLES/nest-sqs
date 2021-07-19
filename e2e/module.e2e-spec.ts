@@ -5,10 +5,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SqsModule, SqsService } from '../lib';
 import { SqsQueueOptions, SqsQueueType, SqsConsumerEvent } from '../lib/sqs.types';
 import { SqsProcess, SqsConsumerEventHandler, SqsMessageHandler } from '../lib/sqs.decorators';
-import { SqsConfig } from '../lib/sqs.config';
-import { Inject } from '@nestjs/common';
-
-const TEST_SERVICE_KEY = 'TEST_SERVICE_KEY';
+import { Module } from '@nestjs/common';
+import { SqsStorage } from '../lib/sqs.storage';
 
 enum TestQueue {
   Test = 'test',
@@ -18,7 +16,6 @@ enum TestQueue {
 const TestQueueOptions: SqsQueueOptions = [
   {
     name: TestQueue.Test,
-    type: SqsQueueType.All,
     consumerOptions: {
       waitTimeSeconds: 1,
       batchSize: 3,
@@ -41,6 +38,45 @@ const config = {
 
 describe('SqsModule', () => {
   let module: TestingModule;
+  const fakeProcessor = jest.fn();
+  const fakeDLQProcessor = jest.fn();
+  const fakeErrorEventHandler = jest.fn();
+
+  @SqsProcess(TestQueue.Test)
+  class A {
+    @SqsMessageHandler()
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    public async handleTestMessage(message: AWS.SQS.Message) {
+      fakeProcessor(message);
+    }
+
+    @SqsConsumerEventHandler(SqsConsumerEvent.PROCESSING_ERROR)
+    public handleErrorEvent(err: Error, message: AWS.SQS.Message) {
+      fakeErrorEventHandler(err, message);
+    }
+  }
+
+  @SqsProcess(TestQueue.DLQ)
+  class B {
+    @SqsMessageHandler()
+    public async handleDLQMessage(message: AWS.SQS.Message) {
+      fakeDLQProcessor(message);
+    }
+  }
+
+  @SqsProcess('c')
+  class C {
+    @SqsMessageHandler()
+    public async handleDLQMessage(message: AWS.SQS.Message) {
+      fakeDLQProcessor(message);
+    }
+  }
+
+  @Module({
+    imports: [SqsModule.registerQueue({ name: 'c' })],
+    providers: [C],
+  })
+  class M {}
 
   describe('forRootAsync', () => {
     afterAll(async () => {
@@ -51,51 +87,23 @@ describe('SqsModule', () => {
       module = await Test.createTestingModule({
         imports: [
           SqsModule.forRootAsync({
-            useFactory: async () => new SqsConfig(config),
+            useFactory: async () => config,
           }),
         ],
       }).compile();
-      const sqsConfig = module.get(SqsConfig);
-      expect(sqsConfig.options).toMatchObject(config);
+      expect(SqsStorage.getConfig()).toMatchObject(config);
     });
   });
 
   describe('registerQueues', () => {
-    const fakeProcessor = jest.fn();
-    const fakeDLQProcessor = jest.fn();
-    const fakeErrorEventHandler = jest.fn();
-
-    @SqsProcess(TestQueue.Test)
-    class A {
-      public constructor(@Inject(TEST_SERVICE_KEY) public readonly sqsService: SqsService) {}
-
-      @SqsMessageHandler()
-      // eslint-disable-next-line @typescript-eslint/no-empty-function
-      public async handleTestMessage(message: AWS.SQS.Message) {
-        fakeProcessor(message);
-      }
-
-      @SqsConsumerEventHandler(SqsConsumerEvent.PROCESSING_ERROR)
-      public handleErrorEvent(err: Error, message: AWS.SQS.Message) {
-        fakeErrorEventHandler(err, message);
-      }
-    }
-
-    @SqsProcess(TestQueue.DLQ)
-    class B {
-      @SqsMessageHandler()
-      public async handleDLQMessage(message: AWS.SQS.Message) {
-        fakeDLQProcessor(message);
-      }
-    }
-
     beforeAll(async () => {
       module = await Test.createTestingModule({
         imports: [
           SqsModule.forRootAsync({
-            useFactory: async () => new SqsConfig(config),
+            useFactory: async () => config,
           }),
-          SqsModule.registerQueue(TEST_SERVICE_KEY, TestQueueOptions),
+          SqsModule.registerQueue(...TestQueueOptions),
+          M,
         ],
         providers: [A, B],
       }).compile();
@@ -112,18 +120,18 @@ describe('SqsModule', () => {
     });
 
     it('should register message handler', () => {
-      const sqsService = module.get(TEST_SERVICE_KEY);
+      const sqsService = module.get(SqsService);
       expect(sqsService.consumers.has(TestQueue.Test)).toBe(true);
     });
     it('should register message producer', () => {
-      const sqsService = module.get(TEST_SERVICE_KEY);
+      const sqsService = module.get(SqsService);
       expect(sqsService.producers.has(TestQueue.Test)).toBe(true);
     });
 
     it('should call message handler when a new message has come', async (done) => {
       jest.setTimeout(30000);
 
-      const sqsService = module.get(TEST_SERVICE_KEY);
+      const sqsService = module.get(SqsService);
       const id = String(Math.floor(Math.random() * 1000000));
       fakeProcessor.mockImplementationOnce((message) => {
         expect(message).toBeTruthy();
@@ -143,7 +151,7 @@ describe('SqsModule', () => {
     it('should call message handler multiple times when multiple messages have come', async () => {
       jest.setTimeout(5000);
 
-      const sqsService = module.get(TEST_SERVICE_KEY);
+      const sqsService = module.get(SqsService);
       const groupId = String(Math.floor(Math.random() * 1000000));
 
       for (let i = 0; i < 3; i++) {
@@ -173,7 +181,7 @@ describe('SqsModule', () => {
     it('should call the registered error handler when an error occurs', async (done) => {
       jest.setTimeout(10000);
 
-      const sqsService = module.get(TEST_SERVICE_KEY);
+      const sqsService = module.get(SqsService);
       const id = String(Math.floor(Math.random() * 1000000));
       fakeProcessor.mockImplementationOnce(() => {
         throw new Error('test');

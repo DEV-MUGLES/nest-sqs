@@ -4,53 +4,52 @@ import { DiscoveryModule, DiscoveryService } from '@nestjs-plus/discovery';
 import { SqsService } from './sqs.service';
 import { SqsAsyncConfig } from './sqs.interfaces';
 import { SqsQueueOptions } from './sqs.types';
-import { SqsConfig } from './sqs.config';
+import { SqsMetadataScanner } from './metadata.scanner';
+import { SqsStorage } from './sqs.storage';
 
 @Global()
 @Module({})
 export class SqsModule {
   public static forRootAsync(asyncSqsConfig: SqsAsyncConfig): DynamicModule {
     const imports = this.getUniqImports([asyncSqsConfig]);
-    const SqsConfigProvider = this.createAsyncConfigProvider(asyncSqsConfig);
 
-    return {
-      global: true,
-      module: SqsModule,
-      imports,
-      providers: [SqsConfigProvider],
-      exports: [SqsConfigProvider],
-    };
-  }
-
-  private static createAsyncConfigProvider(options: SqsAsyncConfig): Provider {
-    return {
-      provide: SqsConfig,
-      useFactory: options.useFactory,
-      inject: options.inject || [],
-    };
-  }
-
-  /**
-   *
-   * @param serviceKey SqsSerivce의 token값이다. sqsService를 inject하여 사용하기 위해서는 producer class에서 @Inject(serviceKey)를 이용하여 주입시켜줘야한다
-   * @param options
-   * @returns
-   */
-  public static registerQueue(serviceKey: string, options: SqsQueueOptions) {
-    const sqsProvider: Provider = {
-      provide: serviceKey,
-      useFactory: async (discover: DiscoveryService, sqsConfig: SqsConfig) => {
-        return new SqsService(await sqsConfig.options, options, discover);
+    const SqsMetadatScanner: Provider = {
+      provide: SqsMetadataScanner,
+      useFactory: async (discover: DiscoveryService) => {
+        return new SqsMetadataScanner(discover);
       },
-      inject: [DiscoveryService, SqsConfig],
+      inject: [DiscoveryService],
+    };
+    this.setSqsConfig(asyncSqsConfig);
+
+    return {
+      global: true,
+      module: SqsModule,
+      imports: [...imports, DiscoveryModule],
+      providers: [SqsMetadatScanner],
+      exports: [SqsMetadatScanner],
+    };
+  }
+
+  private static async setSqsConfig(options: SqsAsyncConfig) {
+    SqsStorage.setConfig(await options.useFactory());
+  }
+
+  public static registerQueue(...options: SqsQueueOptions) {
+    SqsStorage.addQueueOptions([].concat(options));
+    const sqsService: Provider = {
+      provide: SqsService,
+      useFactory: async (scanner: SqsMetadataScanner) => {
+        return new SqsService(scanner);
+      },
+      inject: [SqsMetadataScanner],
     };
 
     return {
       global: true,
       module: SqsModule,
-      imports: [DiscoveryModule],
-      providers: [sqsProvider],
-      exports: [sqsProvider],
+      providers: [sqsService],
+      exports: [sqsService],
     };
   }
 

@@ -1,7 +1,6 @@
 import * as SQS from 'aws-sdk/clients/sqs';
 import { ModuleMetadata } from '@nestjs/common';
-import { SqsConsumerEvent } from './sqs.types';
-import { SqsConfig } from './sqs.config';
+import { SqsConfigOptions, SqsConsumerEvent } from './sqs.types';
 
 export interface Message<T = any> {
   id: string;
@@ -13,7 +12,7 @@ export interface Message<T = any> {
 }
 
 export interface SqsAsyncConfig extends Pick<ModuleMetadata, 'imports'> {
-  useFactory?: (...args: any[]) => SqsConfig | Promise<SqsConfig>;
+  useFactory?: (...args: any[]) => SqsConfigOptions | Promise<SqsConfigOptions>;
   inject?: any[];
 }
 

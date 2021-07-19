@@ -34,8 +34,20 @@ export enum SqsQueueType {
 }
 export type SqsQueueOption = {
   name: QueueName;
-  type: SqsQueueType;
+  type?: SqsQueueType;
   consumerOptions?: SqsConsumerOptions;
   producerOptions?: SqsProducerOptions;
 };
 export type SqsQueueOptions = Array<SqsQueueOption>;
+
+export type SqsMetadata = {
+  name: string;
+  messageHandler: {
+    batch?: boolean;
+    handleMessage: (...args: any[]) => any;
+  };
+  eventHandler: Array<{
+    eventName: string | SqsConsumerEvent;
+    handleEvent: (...args: any[]) => any;
+  }>;
+};
