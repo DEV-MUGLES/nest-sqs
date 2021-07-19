@@ -23,7 +23,7 @@ jobs:
           AWS_SQS_SECRET_ACCESS_KEY: temp
           AWS_SQS_END_POINT: http://localhost:4566
           AWS_SQS_ACCOUNT_NUMBER: 000000000000
-        run: npm run set
+        run: docker-compose -f "docker-compose.yml" up
       - name: npm install
         run: npm ci
       - name: check lint
