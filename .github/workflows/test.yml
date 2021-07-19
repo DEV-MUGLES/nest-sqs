@@ -8,25 +8,7 @@ jobs:
     strategy:
       matrix:
         node-version: [10.x, 12.x]
-    services:
-      localstack:
-        container_name: localstack
-        image: localstack/localstack:latest
-        ports:
-          - '${LOCALSTACK_PORT}:${LOCALSTACK_PORT}'
-        environment:
-          - SERVICES=sqs
-          - AWS_DEFAULT_REGION=${AWS_SQS_REGION}
-          - EDGE_PORT=${LOCALSTACK_PORT}
-          - DEBUG=${LOCALSTACK_DEBUG- }
-        volumes:
-          - '${LOCALSTACK_TMPDIR:-/tmp/localstack}:/tmp/localstack'
-          - '/var/run/docker.sock:/var/run/docker.sock'
-          - '${PWD}/scripts/sqs-local-setup.sh:/docker-entrypoint-initaws.d/sqs-local-setup.sh'
-
     steps:
-      - name: echo
-        run: echo Hello, world!
       - uses: actions/checkout@v2
         name: Checkout code
       - uses: actions/setup-node@v1
@@ -37,7 +19,14 @@ jobs:
         run: npm ci
       - name: check lint
         run: npm run lint
-      - name: npm test
+      - name: test e2e
         env:
-          AWS_SQS_ENDPOINT: http://localhost:4566
-        run: npm run test:e2e
+          LOCALSTACK_PORT: 4566
+          AWS_SQS_REGION: ap-northeast-2
+          AWS_SQS_ACCESS_KEY_ID: temp
+          AWS_SQS_SECRET_ACCESS_KEY: temp
+          AWS_SQS_END_POINT: http://localhost:4566
+          AWS_SQS_ACCOUNT_NUMBER: 000000000000
+        run: |
+          docker compose -f docker-compose.yml up -d
+          npm run test:e2e
