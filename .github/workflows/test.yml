@@ -1,6 +1,6 @@
 name: Test
 
-on: push
+on: [push]
 
 jobs:
   test:
@@ -9,17 +9,26 @@ jobs:
       matrix:
         node-version: [10.x, 12.x]
     services:
-      elasticmq:
-        image: s12v/elasticmq
-        options: -p 9324:9324 -v /tmp/elasticmq:/etc/elasticmq --name elasticmq
+      localstack:
+        container_name: localstack
+        image: localstack/localstack:latest
+        ports:
+          - '${LOCALSTACK_PORT}:${LOCALSTACK_PORT}'
+        environment:
+          - SERVICES=sqs
+          - AWS_DEFAULT_REGION=${AWS_SQS_REGION}
+          - EDGE_PORT=${LOCALSTACK_PORT}
+          - DEBUG=${LOCALSTACK_DEBUG- }
+        volumes:
+          - '${LOCALSTACK_TMPDIR:-/tmp/localstack}:/tmp/localstack'
+          - '/var/run/docker.sock:/var/run/docker.sock'
+          - '${PWD}/scripts/sqs-local-setup.sh:/docker-entrypoint-initaws.d/sqs-local-setup.sh'
+
     steps:
+      - name: echo
+        run: echo Hello, world!
       - uses: actions/checkout@v2
         name: Checkout code
-      - run: sudo cp ${{ github.workspace }}/.github/build/elasticmq.conf /tmp/elasticmq
-      - name: Restart elasticmq
-        uses: docker://docker
-        with:
-          args: docker restart elasticmq
       - uses: actions/setup-node@v1
         name: Use Node.js ${{ matrix.node-version }}
         with:
@@ -30,5 +39,5 @@ jobs:
         run: npm run lint
       - name: npm test
         env:
-          SQS_ENDPOINT: http://localhost:9324
+          AWS_SQS_ENDPOINT: http://localhost:4566
         run: npm run test:e2e
